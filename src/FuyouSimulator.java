@@ -1,4 +1,3 @@
-
 /**
  * FuyouSimulator.java
  * 
@@ -8,17 +7,31 @@
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Properties;
+import java.util.TreeSet;
 import javax.swing.*;
 
 public class FuyouSimulator extends JFrame {
     // GUI components
     private final JTextField[] monthFields = new JTextField[12];
     private final JTextArea resultArea = new JTextArea(6, 30);
+    private final Properties config = new Properties();
 
     /*
      * Constructor to set up the GUI.
      */
     public FuyouSimulator() {
+        // Load configuration properties
+        try (FileInputStream fis = new FileInputStream("src/config.properties")) {
+            config.load(fis);
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(null,
+                    "設定ファイルの読み込みに失敗しました。",
+                    "設定エラー", JOptionPane.ERROR_MESSAGE);
+        }
+
         // Frame settings
         setTitle("扶養控除シミュレーター（課税給与入力）");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -71,9 +84,29 @@ public class FuyouSimulator extends JFrame {
                 StringBuilder sb = new StringBuilder();
                 sb.append(String.format("年間課税給与合計：%,.0f 円%n%n", total));
                 sb.append("＜扶養控除の壁＞\n");
-                sb.append(FuyouCalculator.wallStatus(total, 1_030_000, "103万円")).append("\n");
-                sb.append(FuyouCalculator.wallStatus(total, 1_060_000, "106万円")).append("\n");
-                sb.append(FuyouCalculator.wallStatus(total, 1_300_000, "130万円"));
+
+                // Collect wall keys
+                TreeSet<String> keys = new TreeSet<>();
+                for (Object keyObj : config.keySet()) {
+                    String key = (String) keyObj;
+                    if (key.startsWith("wall.") && key.endsWith(".label")) {
+                        String wallKey = key.substring(5, key.length() - 6);
+                        keys.add(wallKey);
+                    }
+                }
+
+                for (String wallKey : keys) {
+                    String label = config.getProperty("wall." + wallKey + ".label");
+                    String valueStr = config.getProperty("wall." + wallKey + ".value");
+                    if (label != null && valueStr != null) {
+                        try {
+                            double value = Double.parseDouble(valueStr);
+                            sb.append(FuyouCalculator.wallStatus(total, value, label)).append("\n");
+                        } catch (NumberFormatException ex) {
+                            // skip invalid value
+                        }
+                    }
+                }
 
                 resultArea.setText(sb.toString());
 
